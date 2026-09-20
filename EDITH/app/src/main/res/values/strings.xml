@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">EDITH</string>
+
+    <!-- UI strings -->
+    <string name="activate">ACTIVATE\nEDITH</string>
+    <string name="start_edith">Start EDITH</string>
+    <string name="stop_edith">Stop EDITH</string>
+    <string name="status_offline">EDITH is offline — tap Start to begin</string>
+    <string name="status_standby">Standby — Ready for activation</string>
+    <string name="status_listening">Listening…</string>
+    <string name="status_processing">Processing…</string>
+    <string name="status_speaking">Speaking…</string>
+
+    <!-- Permission rationale -->
+    <string name="mic_permission_rationale">EDITH needs microphone access to hear your voice commands. All speech recognition is performed on-device — no audio data leaves your phone.</string>
+    <string name="notification_permission_rationale">EDITH needs notification permission to show its status and provide the activation button while running in the background.</string>
+
+    <!-- Notification -->
+    <string name="notification_channel_name">EDITH Service</string>
+    <string name="notification_channel_description">EDITH assistant background service</string>
+</resources>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- EDITH Dark Theme Colors -->
+    <color name="edith_background">#FF0D1117</color>
+    <color name="edith_surface">#FF161B22</color>
+    <color name="edith_accent">#FF58A6FF</color>
+    <color name="edith_accent_dim">#FF1F3A5F</color>
+    <color name="edith_text_primary">#FFE6EDF3</color>
+    <color name="edith_text_secondary">#FF8B949E</color>
+    <color name="edith_success">#FF3FB950</color>
+    <color name="edith_warning">#FFD29922</color>
+    <color name="edith_error">#FFF85149</color>
+</resources>
