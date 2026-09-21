@@ -3,9 +3,15 @@ package com.edith.core
 /**
  * Routes user input to the appropriate [Tool].
  *
- * The router iterates through registered tools in order and delegates
- * to the first tool that reports it can handle the input. If no tool matches,
- * a graceful "unknown command" response is returned using the EDITH identity.
+ * The router normalizes the input with [InputNormalizer], then iterates through
+ * registered tools in order and delegates to the first tool that reports it can
+ * handle the input. If no tool matches, a graceful "unknown command" response is
+ * returned using the EDITH identity.
+ *
+ * A tool that throws never propagates the exception to the caller: the router
+ * returns a spoken internal-error result instead, so the runtime loop cannot be
+ * wedged by a faulty tool. (Only the exception is contained here; nothing about
+ * the user's input is logged.)
  */
 class CommandRouter(
     private val tools: List<Tool>,
@@ -19,25 +25,28 @@ class CommandRouter(
      * @return The [CommandResult] from the matched tool, or a fallback response.
      */
     fun route(input: String): CommandResult {
-        val normalized = input.trim().lowercase()
+        val normalized = InputNormalizer.normalize(input)
 
-        if (normalized.isBlank()) {
+        if (normalized.isEmpty()) {
             return CommandResult(
                 success = false,
                 spokenResponse = identity.unknownCommandResponse()
             )
         }
 
-        for (tool in tools) {
-            if (tool.canHandle(normalized)) {
-                return tool.execute(input)
-            }
+        return try {
+            val tool = tools.firstOrNull { it.canHandle(normalized) }
+            tool?.execute(input)
+                ?: CommandResult(
+                    success = false,
+                    spokenResponse = identity.unknownCommandResponse()
+                )
+        } catch (e: Exception) {
+            CommandResult(
+                success = false,
+                spokenResponse = identity.internalErrorResponse()
+            )
         }
-
-        return CommandResult(
-            success = false,
-            spokenResponse = identity.unknownCommandResponse()
-        )
     }
 
     /**

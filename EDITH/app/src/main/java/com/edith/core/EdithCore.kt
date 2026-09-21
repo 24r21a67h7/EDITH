@@ -10,14 +10,12 @@ import com.edith.core.tools.TimeTool
  * processing user commands.
  *
  * This class has zero Android dependencies. It can be tested with pure JUnit.
+ * (It is `open`, and accepts its tools, so tests can substitute fakes.)
  */
-class EdithCore(
-    val identity: EdithIdentity = EdithIdentity()
+open class EdithCore(
+    val identity: EdithIdentity = EdithIdentity(),
+    tools: List<Tool> = listOf(TimeTool(identity))
 ) {
-
-    private val tools: List<Tool> = listOf(
-        TimeTool(identity)
-    )
 
     private val router: CommandRouter = CommandRouter(tools, identity)
 
@@ -30,14 +28,14 @@ class EdithCore(
      * @param rawInput The transcribed user speech or text input.
      * @return The [CommandResult] to be spoken/displayed.
      */
-    fun processCommand(rawInput: String): CommandResult {
+    open fun processCommand(rawInput: String): CommandResult {
         return router.route(rawInput)
     }
 
     /**
      * Returns a greeting suitable for when EDITH first comes online.
      */
-    fun greet(): String {
+    open fun greet(): String {
         return identity.greet()
     }
 

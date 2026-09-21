@@ -31,4 +31,11 @@ data class EdithIdentity(
     fun unknownCommandResponse(): String {
         return "I'm not sure how to handle that yet, $userTitle. My capabilities are still limited."
     }
+
+    /**
+     * Spoken when an internal component fails unexpectedly (e.g. a tool throws).
+     */
+    fun internalErrorResponse(): String {
+        return "Something went wrong on my end, $userTitle."
+    }
 }

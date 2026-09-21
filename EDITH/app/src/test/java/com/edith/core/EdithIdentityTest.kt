@@ -59,4 +59,11 @@ class EdithIdentityTest {
         assertEquals("Sir", custom.userTitle)
         assertEquals("Hello, Sir.", custom.formatResponse("Hello"))
     }
+
+
+    @Test
+    fun `internal error response addresses the user`() {
+        assertEquals("Something went wrong on my end, Boss.", identity.internalErrorResponse())
+        assertTrue(EdithIdentity(userTitle = "Sir").internalErrorResponse().contains("Sir"))
+    }
 }

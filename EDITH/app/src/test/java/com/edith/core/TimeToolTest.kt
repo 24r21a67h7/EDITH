@@ -114,4 +114,59 @@ class TimeToolTest {
     fun `tool name is time`() {
         assertEquals("time", timeTool.name)
     }
+
+
+    // --- strict matching (Phase 2): only real "current time" requests ---
+
+    @Test
+    fun `canHandle rejects questions that merely start with what time`() {
+        val notTimeRequests = listOf(
+            "what time does the store close",
+            "what time is my meeting",
+            "what time is my meeting with Sam",
+            "what time should I wake up tomorrow",
+            "what time is the game on Saturday",
+            "what time is it in Tokyo",
+            "what time zone am I in",
+            "I don't have time for this",
+            "time to go home",
+            "current time zone settings"
+        )
+        for (phrase in notTimeRequests) {
+            assertFalse("Must NOT be handled as a time request: '$phrase'", timeTool.canHandle(phrase))
+        }
+    }
+
+    @Test
+    fun `canHandle accepts natural spoken variants`() {
+        val timeRequests = listOf(
+            "What time is it?",
+            "what time is it now",
+            "What time is it right now?",
+            "what is the time",
+            "what's the current time",
+            "whats the time now",
+            "what\u2019s the time",
+            "tell me what time it is",
+            "give me the time",
+            "have you got the time",
+            "hey EDITH, what time is it?",
+            "Edith what time is it please",
+            "can you tell me the time",
+            "could you please tell me the current time, Boss",
+            "  WHAT   TIME   IS   IT  "
+        )
+        for (phrase in timeRequests) {
+            assertTrue("Should be handled as a time request: '$phrase'", timeTool.canHandle(phrase))
+        }
+    }
+
+    @Test
+    fun `execute formats midnight noon and evening`() {
+        fun say(h: Int, m: Int) =
+            TimeTool(identity) { LocalTime.of(h, m) }.execute("what time is it").spokenResponse
+        assertEquals("It is 12:05 AM, Boss.", say(0, 5))
+        assertEquals("It is 12:00 PM, Boss.", say(12, 0))
+        assertEquals("It is 11:59 PM, Boss.", say(23, 59))
+    }
 }

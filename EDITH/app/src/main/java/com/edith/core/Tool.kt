@@ -20,7 +20,8 @@ interface Tool {
     /**
      * Determines whether this tool can handle the given input.
      *
-     * @param input Normalized (trimmed, lowercased) user input.
+     * @param input User input normalized by [InputNormalizer] (lowercase, no punctuation,
+     *              addressing/politeness fillers removed).
      * @return true if this tool should handle the input.
      */
     fun canHandle(input: String): Boolean

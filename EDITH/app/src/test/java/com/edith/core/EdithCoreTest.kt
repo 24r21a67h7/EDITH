@@ -84,4 +84,28 @@ class EdithCoreTest {
             result.spokenResponse.matches(Regex("It is \\d{1,2}:\\d{2} [AP]M, Boss\\."))
         )
     }
+
+
+    @Test
+    fun `other what-time questions are not answered with the time`() {
+        for (q in listOf("what time does the store close?", "what time is my meeting?")) {
+            val result = core.processCommand(q)
+            assertFalse("'$q' must not succeed", result.success)
+            assertFalse(result.spokenResponse.startsWith("It is"))
+        }
+    }
+
+    @Test
+    fun `core survives a faulty tool`() {
+        val faulty = object : Tool {
+            override val name = "faulty"
+            override val description = "throws"
+            override fun canHandle(input: String) = true
+            override fun execute(input: String): CommandResult = error("kaboom")
+        }
+        val c = EdithCore(tools = listOf(faulty))
+        val result = c.processCommand("hello")
+        assertFalse(result.success)
+        assertEquals(c.identity.internalErrorResponse(), result.spokenResponse)
+    }
 }
