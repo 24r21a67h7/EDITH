@@ -8,9 +8,14 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
 import com.edith.R
+import com.edith.runtime.EdithState
 
 /**
  * Manages EDITH's notification channel and foreground service notification.
+ *
+ * Privacy: the notification shows only a coarse status word (Standby / Listening /
+ * Processing / Speaking / Setup needed). It never contains recognized speech or
+ * EDITH's answers, and it is hidden from the lock screen.
  */
 object NotificationHelper {
 
@@ -25,15 +30,25 @@ object NotificationHelper {
     fun createNotificationChannel(context: Context) {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "EDITH Service",
+            context.getString(R.string.notification_channel_name),
             NotificationManager.IMPORTANCE_LOW
         ).apply {
-            description = "EDITH assistant background service"
+            description = context.getString(R.string.notification_channel_description)
             setShowBadge(false)
+            lockscreenVisibility = Notification.VISIBILITY_SECRET
         }
 
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(channel)
+    }
+
+    /** The minimum status text for the notification. */
+    fun statusText(context: Context, state: EdithState, needsSetup: Boolean): String = when {
+        state == EdithState.STANDBY && needsSetup -> context.getString(R.string.status_setup_needed)
+        state == EdithState.STANDBY -> context.getString(R.string.status_standby)
+        state == EdithState.LISTENING -> context.getString(R.string.status_listening)
+        state == EdithState.PROCESSING -> context.getString(R.string.status_processing)
+        else -> context.getString(R.string.status_speaking)
     }
 
     /**
@@ -51,7 +66,7 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // "Activate" action → triggers voice input
+        // "Activate" action → triggers voice input (ignored unless EDITH is idle)
         val activateIntent = Intent(context, EdithForegroundService::class.java).apply {
             action = ACTION_ACTIVATE
         }
@@ -61,15 +76,17 @@ object NotificationHelper {
         )
 
         return NotificationCompat.Builder(context, CHANNEL_ID)
-            .setContentTitle("EDITH")
+            .setContentTitle(context.getString(R.string.app_name))
             .setContentText(statusText)
             .setSmallIcon(R.drawable.ic_edith_notification)
             .setContentIntent(openPending)
             .setOngoing(true)
             .setSilent(true)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
             .addAction(
                 R.drawable.ic_edith_notification,
-                "Activate",
+                context.getString(R.string.notification_action_activate),
                 activatePending
             )
             .build()

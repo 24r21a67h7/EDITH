@@ -1,5 +1,6 @@
 package com.edith.mobile
 
+import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
@@ -7,172 +8,172 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.util.Log
-import com.edith.core.EdithCore
+import com.edith.runtime.EdithState
+import com.edith.runtime.InteractionLoop
+import com.edith.runtime.LoopListener
+import com.edith.voice.VoiceError
+import com.edith.voice.VoiceOutputStatus
 
 /**
- * EDITH Foreground Service.
- *
- * Hosts the EDITH runtime loop:
+ * EDITH Foreground Service. Hosts the [InteractionLoop]:
  *   Activation → Voice Input → Core Processing → Voice Output → Standby
  *
- * Runs as a foreground service with FOREGROUND_SERVICE_TYPE_MICROPHONE
- * so it can access the microphone while the user is in other apps.
+ * Lifecycle rules (Android 14+ microphone FGS restrictions, Android 17 background-audio
+ * hardening):
+ * - The service is only ever promoted to a microphone foreground service in response to
+ *   an explicit [ACTION_START] / [ACTION_START_AND_ACTIVATE] sent while the app is visible.
+ * - It is NOT sticky. If the system kills it, it stays dead: a restart would arrive with a
+ *   null intent, in the background, where a microphone foreground service may not be started
+ *   (and where audio calls would silently fail on Android 17). Any null/unknown intent is
+ *   ignored without touching the microphone.
+ * - If `startForeground` is refused, the service logs, records the problem and stops itself
+ *   (no crash loop).
+ * - Activation requests are only honored while the runtime exists and is in STANDBY.
  *
- * Important Android constraints:
- * - Must be started while the app has a visible Activity (Android 14+ restriction)
- * - RECORD_AUDIO permission must be granted before starting
- * - Shows a persistent notification with an "Activate" action
+ * Privacy: transcripts are never logged and never placed in the notification.
  */
-class EdithForegroundService : Service() {
+class EdithForegroundService : Service(), LoopListener {
 
-    private lateinit var edithCore: EdithCore
-    private lateinit var voiceInput: AndroidVoiceInput
-    private lateinit var voiceOutput: AndroidVoiceOutput
-    private lateinit var activationDetector: ManualActivationDetector
+    private var loop: InteractionLoop? = null
+    private var voiceInput: AndroidVoiceInput? = null
+    private var voiceOutput: AndroidVoiceOutput? = null
+    private var activationDetector: ManualActivationDetector? = null
     private val mainHandler = Handler(Looper.getMainLooper())
-
-    /** Current state of the EDITH runtime. */
-    enum class State {
-        STANDBY,
-        LISTENING,
-        PROCESSING,
-        SPEAKING
-    }
-
-    @Volatile
-    var currentState: State = State.STANDBY
-        private set
 
     companion object {
         private const val TAG = "EDITH.Service"
         const val ACTION_START = "com.edith.ACTION_START"
+        const val ACTION_START_AND_ACTIVATE = "com.edith.ACTION_START_AND_ACTIVATE"
         const val ACTION_STOP = "com.edith.ACTION_STOP"
-    }
-
-    override fun onCreate() {
-        super.onCreate()
-        Log.i(TAG, "EDITH Service created")
-
-        edithCore = EdithApplication.getInstance().edithCore
-        voiceInput = AndroidVoiceInput(this)
-        voiceOutput = AndroidVoiceOutput(this)
-        activationDetector = ManualActivationDetector()
-
-        // Initialize TTS
-        voiceOutput.initialize {
-            Log.i(TAG, "Voice output ready")
-        }
-
-        // Set up activation detector
-        activationDetector.startDetecting {
-            onActivated()
-        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_STOP -> {
-                Log.i(TAG, "Stop requested")
-                stopSelf()
-                return START_NOT_STICKY
-            }
+            ACTION_START -> startRuntime(startId, activateAfterStart = false)
+            ACTION_START_AND_ACTIVATE -> startRuntime(startId, activateAfterStart = true)
             NotificationHelper.ACTION_ACTIVATE -> {
-                Log.i(TAG, "Activation triggered via notification")
-                activationDetector.triggerActivation()
+                val detector = activationDetector
+                if (detector == null) {
+                    Log.w(TAG, "Activation ignored: runtime is not started")
+                    stopSelf(startId)
+                } else {
+                    detector.triggerActivation()
+                }
             }
+            ACTION_STOP -> stopSelf()
             else -> {
-                // Start foreground with microphone type
-                val notification = NotificationHelper.buildForegroundNotification(
-                    this, "Standby — Ready for activation"
-                )
-                startForeground(
-                    NotificationHelper.NOTIFICATION_ID,
-                    notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-                )
-                Log.i(TAG, "EDITH Service started in foreground")
-
-                // Speak greeting
-                mainHandler.postDelayed({
-                    if (voiceOutput.isAvailable()) {
-                        voiceOutput.speak(edithCore.greet())
-                    }
-                }, 500)
+                // Null intent (system restart) or unknown action: never start the microphone here.
+                Log.w(TAG, "Ignoring start without a valid EDITH action")
+                if (loop == null) stopSelf(startId)
             }
         }
-
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
-    /**
-     * Called when EDITH is activated (via button or notification action).
-     * Starts the runtime loop: listen → process → speak → standby.
-     */
-    private fun onActivated() {
-        if (currentState != State.STANDBY) {
-            Log.w(TAG, "Activation ignored — EDITH is busy (state: $currentState)")
+    private fun startRuntime(startId: Int, activateAfterStart: Boolean) {
+        try {
+            startForeground(
+                NotificationHelper.NOTIFICATION_ID,
+                NotificationHelper.buildForegroundNotification(
+                    this, NotificationHelper.statusText(this, EdithState.STANDBY, needsSetup = false)
+                ),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            )
+        } catch (e: Exception) {
+            // SecurityException (RECORD_AUDIO missing) or ForegroundServiceStartNotAllowedException.
+            Log.e(TAG, "Cannot start microphone foreground service: ${e.javaClass.simpleName}")
+            EdithServiceStatus.reportProblem(EdithServiceStatus.Problem.START_FAILED)
+            EdithServiceStatus.markStopped()
+            stopSelf(startId)
             return
         }
 
-        Log.i(TAG, "EDITH activated — starting listening")
-        currentState = State.LISTENING
-        updateNotification("Listening...")
+        val created = loop == null
+        if (created) createRuntime()
+        EdithServiceStatus.markRunning()
+        Log.i(TAG, "EDITH service running in foreground")
 
-        // Must run on main thread (SpeechRecognizer requirement)
-        mainHandler.post {
-            voiceInput.startListening(
-                onResult = { transcribedText ->
-                    onVoiceInputResult(transcribedText)
-                },
-                onError = { error ->
-                    Log.w(TAG, "Voice input error: $error")
-                    currentState = State.STANDBY
-                    updateNotification("Standby — Ready for activation")
-                }
-            )
+        val runningLoop = loop ?: return
+        if (activateAfterStart) {
+            runningLoop.activate()
+        } else if (created) {
+            runningLoop.startupGreeting()
         }
     }
 
-    /**
-     * Called when speech recognition produces a result.
-     */
-    private fun onVoiceInputResult(text: String) {
-        Log.i(TAG, "Heard: \"$text\"")
-        currentState = State.PROCESSING
-        updateNotification("Processing: \"$text\"")
+    private fun createRuntime() {
+        val output = AndroidVoiceOutput(this)
+        val input = AndroidVoiceInput(this)
+        val detector = ManualActivationDetector()
+        val newLoop = InteractionLoop(
+            core = EdithApplication.getInstance().edithCore,
+            voiceInput = input,
+            voiceOutput = output,
+            scheduler = HandlerScheduler(mainHandler),
+            listener = this
+        )
+        voiceInput = input
+        voiceOutput = output
+        activationDetector = detector
+        loop = newLoop
 
-        // Process through EDITH Core
-        val result = edithCore.processCommand(text)
-        Log.i(TAG, "Response: ${result.spokenResponse}")
-
-        // Speak the response
-        currentState = State.SPEAKING
-        updateNotification("Speaking...")
-
-        voiceOutput.speak(result.spokenResponse) {
-            // Return to standby after speaking
-            currentState = State.STANDBY
-            updateNotification("Standby — Ready for activation")
-            Log.i(TAG, "Returned to standby")
+        detector.startDetecting { newLoop.activate() }
+        output.initialize { status ->
+            if (status != VoiceOutputStatus.READY) {
+                Log.w(TAG, "Voice output unavailable: $status")
+                EdithServiceStatus.reportProblem(EdithServiceStatus.Problem.TTS_UNAVAILABLE)
+                updateNotification(EdithServiceStatus.snapshot.state)
+            }
         }
     }
 
-    /**
-     * Updates the foreground notification with current status.
-     */
-    private fun updateNotification(statusText: String) {
-        val notification = NotificationHelper.buildForegroundNotification(this, statusText)
-        val manager = getSystemService(android.app.NotificationManager::class.java)
-        manager.notify(NotificationHelper.NOTIFICATION_ID, notification)
+    // ---- LoopListener ----------------------------------------------------------------
+
+    override fun onStateChanged(state: EdithState) {
+        if (state == EdithState.LISTENING) EdithServiceStatus.clearProblem()
+        EdithServiceStatus.setState(state)
+        updateNotification(state)
+    }
+
+    override fun onInputError(error: VoiceError) {
+        EdithServiceStatus.problemFor(error)?.let { EdithServiceStatus.reportProblem(it) }
+    }
+
+    override fun onOutputFailure() {
+        EdithServiceStatus.reportProblem(EdithServiceStatus.Problem.TTS_UNAVAILABLE)
+    }
+
+    override fun onDiagnostic(message: String) {
+        Log.w(TAG, message)
+    }
+
+    private fun updateNotification(state: EdithState) {
+        val needsSetup = EdithServiceStatus.snapshot.problem?.needsSetup == true
+        val notification = NotificationHelper.buildForegroundNotification(
+            this, NotificationHelper.statusText(this, state, needsSetup)
+        )
+        getSystemService(NotificationManager::class.java)
+            .notify(NotificationHelper.NOTIFICATION_ID, notification)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
-        Log.i(TAG, "EDITH Service destroyed")
-        activationDetector.destroy()
-        voiceInput.destroy()
-        voiceOutput.destroy()
+        Log.i(TAG, "EDITH service destroyed")
+        loop?.shutdown()
+        activationDetector?.destroy()
+        voiceInput?.destroy()
+        voiceOutput?.destroy()
+        loop = null
+        activationDetector = null
+        voiceInput = null
+        voiceOutput = null
+        try {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } catch (e: Exception) {
+            Log.w(TAG, "stopForeground threw ${e.javaClass.simpleName}")
+        }
+        EdithServiceStatus.markStopped()
         super.onDestroy()
     }
 }

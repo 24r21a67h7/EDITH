@@ -51,15 +51,26 @@
         android:backgroundTint="@color/edith_surface"
         android:layout_marginBottom="32dp" />
 
-    <!-- Response display -->
+    <!-- Setup action (permission / speech pack / voice data), shown only when something needs fixing -->
+    <Button
+        android:id="@+id/setupButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        android:textSize="14sp"
+        android:textColor="@color/edith_text_primary"
+        android:backgroundTint="@color/edith_warning"
+        android:layout_marginBottom="24dp" />
+
+    <!-- Setup checklist / last issue (never shows recognized speech) -->
     <TextView
         android:id="@+id/responseText"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text=""
-        android:textSize="18sp"
-        android:textColor="@color/edith_text_primary"
-        android:gravity="center"
+        android:textSize="13sp"
+        android:textColor="@color/edith_text_secondary"
+        android:gravity="start"
         android:fontFamily="monospace"
         android:lineSpacingExtra="4dp" />
 

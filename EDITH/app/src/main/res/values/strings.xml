@@ -6,17 +6,57 @@
     <string name="activate">ACTIVATE\nEDITH</string>
     <string name="start_edith">Start EDITH</string>
     <string name="stop_edith">Stop EDITH</string>
-    <string name="status_offline">EDITH is offline — tap Start to begin</string>
-    <string name="status_standby">Standby — Ready for activation</string>
+
+    <!-- Status (also used, as plain words, in the foreground notification) -->
+    <string name="status_offline">EDITH is stopped — tap Start to begin</string>
+    <string name="status_active">EDITH is active — tap Activate to speak</string>
+    <string name="status_standby">Standby</string>
     <string name="status_listening">Listening…</string>
     <string name="status_processing">Processing…</string>
     <string name="status_speaking">Speaking…</string>
+    <string name="status_setup_needed">Setup needed — open EDITH</string>
+    <string name="status_mic_needed">Microphone permission required</string>
+
+    <!-- Setup checklist -->
+    <string name="setup_mic_granted">✓ Microphone permission granted</string>
+    <string name="setup_mic_needed">✗ Microphone permission needed</string>
+    <string name="setup_mic_blocked">✗ Microphone permission blocked — allow it in app settings</string>
+    <string name="setup_stt_checking">… Checking offline speech recognition</string>
+    <string name="setup_stt_ready">✓ Offline speech recognition ready</string>
+    <string name="setup_stt_unavailable">✗ Offline speech recognition is not available on this device</string>
+    <string name="setup_stt_language_missing">✗ English offline speech pack is not installed</string>
+    <string name="setup_stt_check_failed">? Could not verify offline speech recognition (will try anyway)</string>
+    <string name="setup_tts_checking">… Checking offline voice</string>
+    <string name="setup_tts_ready">✓ Offline voice ready</string>
+    <string name="setup_tts_engine_unavailable">✗ Text-to-speech engine is unavailable</string>
+    <string name="setup_tts_no_voice">✗ No installed offline English voice found (EDITH will not use network voices)</string>
+
+    <!-- Last problem reported by the service -->
+    <string name="problem_last">Last issue: %1$s</string>
+    <string name="problem_stt_unavailable">speech recognition is unavailable</string>
+    <string name="problem_stt_language_missing">the offline English speech pack is missing</string>
+    <string name="problem_mic_permission">microphone permission was denied</string>
+    <string name="problem_tts_unavailable">voice output is unavailable</string>
+    <string name="problem_start_failed">Android refused to start the microphone service</string>
+    <string name="problem_audio">the microphone had a problem</string>
+    <string name="problem_other">something went wrong</string>
+
+    <!-- Setup action buttons -->
+    <string name="action_grant_microphone">Grant microphone access</string>
+    <string name="action_open_app_settings">Open app settings</string>
+    <string name="action_open_speech_settings">Open speech settings</string>
+    <string name="action_install_voice_data">Install voice data</string>
+    <string name="action_open_tts_settings">Open text-to-speech settings</string>
+    <string name="action_open_failed">Could not open that settings screen on this device.</string>
+    <string name="dialog_continue">Continue</string>
+    <string name="dialog_cancel">Not now</string>
 
     <!-- Permission rationale -->
-    <string name="mic_permission_rationale">EDITH needs microphone access to hear your voice commands. All speech recognition is performed on-device — no audio data leaves your phone.</string>
+    <string name="mic_permission_rationale">EDITH needs microphone access to hear your voice commands. It only listens after you activate it, asks Android for on-device speech recognition, and the app has no internet permission.</string>
     <string name="notification_permission_rationale">EDITH needs notification permission to show its status and provide the activation button while running in the background.</string>
 
     <!-- Notification -->
     <string name="notification_channel_name">EDITH Service</string>
     <string name="notification_channel_description">EDITH assistant background service</string>
+    <string name="notification_action_activate">Activate</string>
 </resources>
