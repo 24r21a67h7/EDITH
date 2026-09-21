@@ -2,6 +2,7 @@ package com.edith.core.tools
 
 import com.edith.core.CommandResult
 import com.edith.core.EdithIdentity
+import com.edith.core.InputNormalizer
 import com.edith.core.Tool
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -12,6 +13,12 @@ import java.util.Locale
  *
  * Uses [java.time.LocalTime] — no Android framework dependency.
  * The time source can be overridden for testing via the [timeProvider] parameter.
+ *
+ * Matching is deliberately strict: the whole (normalized) utterance must be a
+ * request for the current time. Substring matching is NOT used, so questions
+ * such as "what time does the store close" or "what time is my meeting" are
+ * left for other tools (or answered as unknown) instead of being answered with
+ * the current time.
  */
 class TimeTool(
     private val identity: EdithIdentity,
@@ -21,20 +28,19 @@ class TimeTool(
     override val name: String = "time"
     override val description: String = "Returns the current local time"
 
-    private val timePatterns = listOf(
-        "what time",
-        "current time",
-        "tell me the time",
-        "what's the time",
-        "whats the time",
-        "time is it",
-        "do you have the time",
-        "got the time"
+    // Applied to InputNormalizer output: lowercase, no punctuation, apostrophes removed.
+    private val timeRequests = listOf(
+        Regex("^what time is it(?: right now| now| currently)?$"),
+        Regex("^(?:what is|whats) the (?:current )?time(?: right now| now)?$"),
+        Regex("^(?:tell|give) me the (?:current )?time(?: right now| now)?$"),
+        Regex("^tell me what time it is(?: right now| now)?$"),
+        Regex("^(?:do you have|have you got|got) the time$"),
+        Regex("^(?:the )?current time$")
     )
 
     override fun canHandle(input: String): Boolean {
-        val lower = input.trim().lowercase()
-        return timePatterns.any { lower.contains(it) }
+        val normalized = InputNormalizer.normalize(input)
+        return timeRequests.any { it.matches(normalized) }
     }
 
     override fun execute(input: String): CommandResult {
